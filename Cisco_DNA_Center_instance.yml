@@ -1,0 +1,158 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Cisco DNA Center Instance Deployment
+Metadata: 
+  AWS::CloudFormation::Interface: 
+    ParameterGroups: 
+      - Label: 
+          default: EC2 Instance Configuration
+        Parameters: 
+          - EnvironmentName
+          - PrivateSubnet1ID
+          - SecurityGroup
+          - Keypair      
+      - Label: 
+          default: Cisco DNA Center Configuration
+        Parameters: 
+          - DnacInstanceIP
+          - DnacNetmask
+          - DnacGateway
+          - DnacDnsServer
+          - DnacPassword
+          - DnacFQDN
+          - DnacHttpsProxy
+          - DnacHttpsProxyUsername
+          - DnacHttpsProxyPassword
+
+Mappings:
+  RegionMap:
+    us-west-1:
+      DNAC: "ami-0393e4436b9097ec6"
+    ap-south-1:
+      DNAC: "ami-02a01cc5a2e40240c"
+    eu-central-1:
+      DNAC: "ami-0d3d92adeed66a4d9"
+    ap-southeast-2:
+      DNAC: "ami-039328de5f5106989"
+    ap-southeast-1:
+      DNAC: "ami-07fbfa61958e4fff2"
+    us-east-1:
+      DNAC: "ami-06ebf482b1cd486ef"
+    ap-northeast-1: 
+      DNAC: "ami-0292a2a796f24d457"
+    us-east-2: 
+      DNAC: "ami-059277f0e3593e102"
+    ca-central-1:
+      DNAC: "ami-050e7c5cb5b4cece8"
+    #sa-east-1:
+    #  DNAC: "ami-053b94c8c19b19afa"
+    eu-west-2:
+      DNAC: "ami-05e40b011d8790a71"
+    #af-south-1:
+    #  DNAC: "ami-0d17cf2905e263357"
+    #me-central-1:
+    #  DNAC: "ami-0ef6a63049f461c27"
+    eu-south-1:
+      DNAC: "ami-05704e7bc8afdaa38"
+    us-west-2:
+      DNAC: "ami-065c6dab76f4c0909"
+    eu-west-1:
+      DNAC: "ami-0cfe4ac465932e476"
+    eu-west-3:
+      DNAC: "ami-06641fae3a82af9ae"
+    ap-northeast-2:
+      DNAC: "ami-0fb5fe41c1d98ff7e"
+
+Parameters:
+  EnvironmentName:
+    Description: String that will be prefixed to AWS resource names
+    Type: String
+  PrivateSubnet1ID:
+    Description: VPC Subnet to use for Cisco DNA Center
+    Type: AWS::EC2::Subnet::Id
+    AllowedPattern: .+
+  DnacInstanceIP:
+    Description: Cisco DNA Center IP Address
+    Type: String
+    AllowedPattern: .+
+  Keypair:
+    Description: SSH Keypair for Cisco DNA Center
+    Type: AWS::EC2::KeyPair::KeyName
+    AllowedPattern: .+
+  DnacNetmask:
+    Description: Cisco DNA Center Netmask  
+    Type: String
+    AllowedPattern: .+
+  DnacGateway:
+    Description: Cisco DNA Center Gateway Address
+    Type: String
+    AllowedPattern: .+
+  DnacDnsServer:
+    Description: Enterprise DNS Server
+    Type: String
+    AllowedPattern: .+
+  DnacFQDN:
+    Description: Cisco DNA Center FQDN 
+    Type: String
+    AllowedPattern: .+
+  DnacPassword:
+    Description: Cisco DNA Center Password  
+    Type: String
+    AllowedPattern: .+
+  DnacHttpsProxy:
+    Description: Enterprise HTTPS Proxy (optional)
+    Type: String
+  DnacHttpsProxyUsername:
+    Description: HTTPS Proxy Username (optional)
+    Type: String
+  DnacHttpsProxyPassword:
+    Description: HTTPS Proxy Password (optional)
+    Type: String 
+  SecurityGroup:
+    Description: Security Group to Attach to Cisco DNA Center
+    Type: AWS::EC2::SecurityGroup::Id
+    AllowedPattern: .+
+    ConstraintDescription: Security group cannot be empty
+
+Resources: 
+  DNACInstance:
+    Type: "AWS::EC2::Instance"
+    Properties:
+      ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", DNAC]
+      InstanceType: r5a.8xlarge
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeType: gp3
+            VolumeSize: 4096
+            DeleteOnTermination: true
+      SecurityGroupIds: 
+        - !Ref SecurityGroup
+      KeyName: !Ref Keypair 
+      SubnetId: !Ref PrivateSubnet1ID
+      PrivateIpAddress: !Ref DnacInstanceIP
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}_VA_Cisco_DNA_Center_Instance'
+      UserData:
+        'Fn::Base64': !Sub |
+           #cloud-config
+           write_files:
+            - content: |
+                {
+                  "IPaddress": "${DnacInstanceIP}",
+                  "netmask": "${DnacNetmask}",
+                  "gateway": "${DnacGateway}",
+                  "dns_servers": ["${DnacDnsServer}"],
+                  "fqdn" : "${DnacFQDN}",
+                  "https_proxy" : "${DnacHttpsProxy}",
+                  "https_proxy_username" : "${DnacHttpsProxyUsername}",
+                  "https_proxy_password" : "${DnacHttpsProxyPassword}",
+                  "ntp": ["169.254.169.123"],
+                  "password" : "${DnacPassword}"
+                }
+              path: /etc/cloud.json
+
+Outputs:
+  DNACInstance:
+    Description: Cisco DNA Center Instance ID
+    Value: !Ref DNACInstance
